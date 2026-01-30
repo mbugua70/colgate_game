@@ -658,115 +658,187 @@ export default function ToothBrushGame() {
       return; // No clean effects to draw
     }
 
-    const gradient = ctx.createRadialGradient(
-      screen.x, screen.y, 0,
-      screen.x, screen.y, screenRadius * 1.8
-    );
+    const time = Date.now() / 150;
 
     if (tooth.progress >= 1) {
-      // Clean tooth - bright white with blue glow (minty fresh look)
-      gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-      gradient.addColorStop(0.4, 'rgba(200, 240, 255, 0.7)');
-      gradient.addColorStop(0.7, 'rgba(0, 163, 224, 0.3)');
-      gradient.addColorStop(1, 'rgba(0, 122, 194, 0)');
+      // Clean tooth - white shine glow
+      const glow = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, screenRadius * 1.2);
+      glow.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+      glow.addColorStop(0.5, 'rgba(255, 255, 255, 0.3)');
+      glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      ctx.beginPath();
+      ctx.arc(screen.x, screen.y, screenRadius * 1.2, 0, Math.PI * 2);
+      ctx.fillStyle = glow;
+      ctx.fill();
 
-      // Animated sparkle ring for clean teeth
-      const time = Date.now() / 150;
-      for (let i = 0; i < 6; i++) {
-        const angle = time + (i * Math.PI / 3);
-        const distance = screenRadius * (0.6 + Math.sin(time * 2 + i) * 0.2);
-        const sparkleX = screen.x + Math.cos(angle) * distance;
-        const sparkleY = screen.y + Math.sin(angle) * distance;
-        const sparkleSize = 2 + Math.sin(time * 3 + i) * 1;
-
-        ctx.beginPath();
-        ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(255, 255, 255, ${0.7 + Math.sin(time + i) * 0.3})`;
-        ctx.fill();
-      }
-
-      // Center star burst
+      // Rotating 4-point whitening star at center
+      const starSize = screenRadius * (0.6 + Math.sin(time * 0.4) * 0.08);
       ctx.save();
       ctx.translate(screen.x, screen.y);
-      ctx.rotate(time * 0.5);
-      for (let i = 0; i < 4; i++) {
+      ctx.rotate(time * 0.08);
+      for (let arm = 0; arm < 4; arm++) {
         ctx.rotate(Math.PI / 2);
         ctx.beginPath();
-        ctx.moveTo(0, -screenRadius * 0.3);
-        ctx.lineTo(2, 0);
-        ctx.lineTo(0, screenRadius * 0.3);
-        ctx.lineTo(-2, 0);
+        ctx.moveTo(0, -starSize);
+        ctx.quadraticCurveTo(starSize * 0.1, -starSize * 0.1, starSize * 0.3, 0);
+        ctx.quadraticCurveTo(starSize * 0.1, starSize * 0.1, 0, starSize);
+        ctx.quadraticCurveTo(-starSize * 0.1, starSize * 0.1, -starSize * 0.3, 0);
+        ctx.quadraticCurveTo(-starSize * 0.1, -starSize * 0.1, 0, -starSize);
         ctx.closePath();
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.7 + Math.sin(time * 0.5 + arm) * 0.2})`;
         ctx.fill();
       }
       ctx.restore();
-    } else {
-      // Partially cleaned - whitening transition effect
+
+      // Small flickering sparkle stars around the tooth
+      for (let i = 0; i < 4; i++) {
+        const angle = time * 0.15 + (i / 4) * Math.PI * 2;
+        const dist = screenRadius * (0.7 + Math.sin(time * 0.3 + i * 2) * 0.15);
+        const sx = screen.x + Math.cos(angle) * dist;
+        const sy = screen.y + Math.sin(angle) * dist;
+        const ss = 2.5 + Math.sin(time * 0.6 + i * 1.5) * 1;
+        const alpha = 0.5 + Math.sin(time * 0.4 + i) * 0.4;
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(time * 0.2 + i);
+        ctx.beginPath();
+        ctx.moveTo(0, -ss);
+        ctx.lineTo(ss * 0.22, 0);
+        ctx.lineTo(0, ss);
+        ctx.lineTo(-ss * 0.22, 0);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-ss, 0);
+        ctx.lineTo(0, ss * 0.22);
+        ctx.lineTo(ss, 0);
+        ctx.lineTo(0, -ss * 0.22);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+        ctx.fill();
+        ctx.restore();
+      }
+    } else if (tooth.progress > 0) {
+      // Partially cleaned - growing whitening star
       const alpha = tooth.progress * 0.8;
+      const partialSize = screenRadius * tooth.progress * 0.5;
 
-      // Whitening glow that increases with progress
-      gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.6})`);
-      gradient.addColorStop(0.3, `rgba(220, 240, 255, ${alpha * 0.4})`);
-      gradient.addColorStop(0.6, `rgba(0, 163, 224, ${alpha * 0.2})`);
-      gradient.addColorStop(1, 'rgba(200, 240, 255, 0)');
-
-      // Progress ring
+      // Soft white glow proportional to progress
+      const partialGlow = ctx.createRadialGradient(screen.x, screen.y, 0, screen.x, screen.y, screenRadius * tooth.progress);
+      partialGlow.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.6})`);
+      partialGlow.addColorStop(0.6, `rgba(255, 255, 255, ${alpha * 0.2})`);
+      partialGlow.addColorStop(1, 'rgba(255, 255, 255, 0)');
       ctx.beginPath();
-      ctx.arc(screen.x, screen.y, screenRadius * 1.3, -Math.PI / 2, -Math.PI / 2 + (Math.PI * 2 * tooth.progress), false);
-      ctx.strokeStyle = COLORS.accentLight;
-      ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-      ctx.stroke();
-    }
+      ctx.arc(screen.x, screen.y, screenRadius * tooth.progress, 0, Math.PI * 2);
+      ctx.fillStyle = partialGlow;
+      ctx.fill();
 
-    ctx.beginPath();
-    ctx.arc(screen.x, screen.y, screenRadius * 1.5, 0, Math.PI * 2);
-    ctx.fillStyle = gradient;
-    ctx.fill();
+      // Small star that grows with progress
+      if (partialSize > 2) {
+        ctx.save();
+        ctx.translate(screen.x, screen.y);
+        ctx.rotate(time * 0.1);
+        ctx.beginPath();
+        ctx.moveTo(0, -partialSize);
+        ctx.lineTo(partialSize * 0.2, 0);
+        ctx.lineTo(0, partialSize);
+        ctx.lineTo(-partialSize * 0.2, 0);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+        ctx.fill();
+        ctx.beginPath();
+        ctx.moveTo(-partialSize, 0);
+        ctx.lineTo(0, partialSize * 0.2);
+        ctx.lineTo(partialSize, 0);
+        ctx.lineTo(0, -partialSize * 0.2);
+        ctx.closePath();
+        ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.7})`;
+        ctx.fill();
+        ctx.restore();
+      }
+    }
   }, [imageToScreen, drawStains, drawDirtyOverlay]);
 
-  // Draw Colgate-themed brush cursor
+  // Draw shiny whitening star-burst brush cursor
   const drawBrush = useCallback((ctx) => {
     if (!brushPosRef.current || !isBrushingRef.current) return;
 
     const { x, y } = brushPosRef.current;
     const radius = brushRadiusRef.current;
-    const time = Date.now() / 100;
+    const time = Date.now() / 80;
 
-    // Outer pulsing ring
-    const pulseRadius = radius * (1.1 + Math.sin(time) * 0.1);
+    // Soft white glow at center
+    const glow = ctx.createRadialGradient(x, y, 0, x, y, radius * 1.2);
+    glow.addColorStop(0, 'rgba(255, 255, 255, 0.7)');
+    glow.addColorStop(0.3, 'rgba(220, 240, 255, 0.35)');
+    glow.addColorStop(0.7, 'rgba(200, 230, 255, 0.1)');
+    glow.addColorStop(1, 'rgba(200, 230, 255, 0)');
     ctx.beginPath();
-    ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(226, 5, 20, ${0.3 + Math.sin(time) * 0.1})`;
-    ctx.lineWidth = 3;
-    ctx.stroke();
-
-    // Main brush area with Colgate red gradient
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, 'rgba(226, 5, 20, 0.4)');
-    gradient.addColorStop(0.5, 'rgba(226, 5, 20, 0.2)');
-    gradient.addColorStop(1, 'rgba(226, 5, 20, 0.05)');
-    ctx.fillStyle = gradient;
+    ctx.arc(x, y, radius * 1.2, 0, Math.PI * 2);
+    ctx.fillStyle = glow;
     ctx.fill();
 
-    // Inner white core (toothpaste foam effect)
-    ctx.beginPath();
-    ctx.arc(x, y, radius * 0.4, 0, Math.PI * 2);
-    const innerGradient = ctx.createRadialGradient(x, y, 0, x, y, radius * 0.4);
-    innerGradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
-    innerGradient.addColorStop(1, 'rgba(200, 230, 255, 0.3)');
-    ctx.fillStyle = innerGradient;
-    ctx.fill();
+    // Rotating 4-point star burst at center
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(time * 0.08);
+    const starSize = radius * (0.5 + Math.sin(time * 0.3) * 0.1);
+    for (let i = 0; i < 4; i++) {
+      ctx.rotate(Math.PI / 2);
+      ctx.beginPath();
+      ctx.moveTo(0, -starSize);
+      ctx.quadraticCurveTo(starSize * 0.08, -starSize * 0.08, starSize * 0.35, 0);
+      ctx.quadraticCurveTo(starSize * 0.08, starSize * 0.08, 0, starSize);
+      ctx.quadraticCurveTo(-starSize * 0.08, starSize * 0.08, -starSize * 0.35, 0);
+      ctx.quadraticCurveTo(-starSize * 0.08, -starSize * 0.08, 0, -starSize);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.7 + Math.sin(time * 0.4 + i) * 0.2})`;
+      ctx.fill();
+    }
+    ctx.restore();
 
-    // Brush ring
+    // Orbiting mini sparkle stars
+    const sparkleCount = 6;
+    for (let i = 0; i < sparkleCount; i++) {
+      const angle = time * 0.12 + (i / sparkleCount) * Math.PI * 2;
+      const dist = radius * (0.55 + Math.sin(time * 0.25 + i * 1.5) * 0.15);
+      const sx = x + Math.cos(angle) * dist;
+      const sy = y + Math.sin(angle) * dist;
+      const sparkleSize = 3 + Math.sin(time * 0.5 + i * 2) * 1.5;
+      const alpha = 0.6 + Math.sin(time * 0.3 + i) * 0.3;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(time * 0.15 + i);
+      ctx.beginPath();
+      ctx.moveTo(0, -sparkleSize);
+      ctx.lineTo(sparkleSize * 0.25, 0);
+      ctx.lineTo(0, sparkleSize);
+      ctx.lineTo(-sparkleSize * 0.25, 0);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha})`;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(-sparkleSize, 0);
+      ctx.lineTo(0, sparkleSize * 0.25);
+      ctx.lineTo(sparkleSize, 0);
+      ctx.lineTo(0, -sparkleSize * 0.25);
+      ctx.closePath();
+      ctx.fillStyle = `rgba(220, 240, 255, ${alpha * 0.7})`;
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // Bright center dot
+    const dotGrad = ctx.createRadialGradient(x, y, 0, x, y, radius * 0.15);
+    dotGrad.addColorStop(0, 'rgba(255, 255, 255, 0.95)');
+    dotGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    ctx.strokeStyle = COLORS.primary;
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.arc(x, y, radius * 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = dotGrad;
+    ctx.fill();
   }, []);
 
   // Draw particles with enhanced effects
@@ -1069,14 +1141,13 @@ export default function ToothBrushGame() {
       {/* Header - hidden on start screen */}
       {gameState !== 'idle' && (
         <div style={styles.header}>
-          <div style={styles.logoSection}>
-            <h1 style={styles.title}>
-              <span style={styles.logoText}>Colgate</span>
-              <span style={styles.logoSubtext}>Brush Challenge</span>
-            </h1>
-          </div>
+          <img
+            src="/colgate logo .png"
+            alt="Colgate"
+            style={styles.headerLogo}
+          />
           {gameState === 'playing' && (
-            <div style={styles.statsContainer}>
+            <div style={styles.statsOverlay}>
               <div style={styles.scoreBox}>
                 <span style={styles.scoreLabel}>SCORE</span>
                 <span style={styles.scoreValue}>{Math.floor(score)}</span>
@@ -1086,19 +1157,6 @@ export default function ToothBrushGame() {
                 <span style={styles.timerLabel}>SEC</span>
               </div>
             </div>
-          )}
-        </div>
-      )}
-
-      {/* Progress Bar */}
-      {gameState === 'playing' && (
-        <div style={styles.progressBarContainer}>
-          <div style={styles.progressBarBg}>
-            <div style={{...styles.progressBarFill, width: `${progressPercent}%`}} />
-          </div>
-          <span style={styles.progressText}>{cleanCount}/{totalTeeth} Teeth Clean</span>
-          {streak >= 2 && (
-            <span style={styles.streakBadge}>🔥 x{streak}</span>
           )}
         </div>
       )}
@@ -1194,6 +1252,23 @@ export default function ToothBrushGame() {
           </div>
         )}
       </div>
+
+      {/* Progress Bar - below the game canvas */}
+      {gameState === 'playing' && (
+        <div style={styles.progressBarContainer}>
+          <div style={styles.progressBarInner}>
+            <div style={styles.progressBarBg}>
+              <div style={{...styles.progressBarFill, width: `${progressPercent}%`}} />
+            </div>
+            <div style={styles.progressInfo}>
+              <span style={styles.progressText}>{cleanCount}/{totalTeeth} Teeth Clean</span>
+              {streak >= 2 && (
+                <span style={styles.streakBadge}>🔥 x{streak}</span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1219,121 +1294,118 @@ const getResponsiveStyles = (screenSize) => {
       overflow: 'hidden',
     },
     header: {
-      padding: isMobile ? '12px 16px' : isTablet ? '14px 20px' : '16px 24px',
+      position: 'relative',
+      flexShrink: 0,
+      width: '100%',
+      overflow: 'hidden',
+      backgroundColor: COLORS.white,
+    },
+    headerLogo: {
+      display: 'block',
+      width: '100%',
+      height: 'auto',
+      objectFit: 'cover',
+    },
+    statsOverlay: {
+      position: 'absolute',
+      bottom: isMobile ? '8px' : '14px',
+      left: 0,
+      right: 0,
       display: 'flex',
       justifyContent: 'space-between',
-      alignItems: 'center',
-      background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`,
-      flexShrink: 0,
-      minHeight: isMobile ? '70px' : isTablet ? '65px' : '70px',
-      boxShadow: '0 4px 20px rgba(226, 5, 20, 0.3)',
-    },
-    logoSection: {
-      display: 'flex',
-      flexDirection: 'column',
-    },
-    title: {
-      margin: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '2px',
-    },
-    logoText: {
-      fontSize: isMobile ? '1.6rem' : isTablet ? '1.8rem' : '2rem',
-      fontWeight: '800',
-      color: COLORS.white,
-      textTransform: 'uppercase',
-      letterSpacing: '2px',
-      textShadow: '2px 2px 4px rgba(0,0,0,0.3)',
-    },
-    logoSubtext: {
-      fontSize: isMobile ? '0.7rem' : isTablet ? '0.8rem' : '0.85rem',
-      fontWeight: '600',
-      color: 'rgba(255,255,255,0.9)',
-      textTransform: 'uppercase',
-      letterSpacing: '3px',
-    },
-    statsContainer: {
-      display: 'flex',
-      gap: isMobile ? '12px' : '16px',
-      alignItems: 'center',
+      alignItems: 'flex-end',
+      padding: isMobile ? '0 16px' : isTablet ? '0 28px' : '0 40px',
+      pointerEvents: 'none',
     },
     scoreBox: {
       display: 'flex',
       flexDirection: 'column',
       alignItems: 'center',
       backgroundColor: 'rgba(255,255,255,0.2)',
-      padding: isMobile ? '6px 12px' : '8px 16px',
-      borderRadius: '12px',
-      backdropFilter: 'blur(10px)',
+      padding: isMobile ? '5px 12px' : '6px 16px',
+      borderRadius: '10px',
+      backdropFilter: 'blur(6px)',
+      pointerEvents: 'auto',
     },
     scoreLabel: {
-      fontSize: isMobile ? '0.6rem' : '0.7rem',
-      color: 'rgba(255,255,255,0.8)',
-      fontWeight: '600',
-      letterSpacing: '1px',
+      fontSize: isMobile ? '0.55rem' : '0.6rem',
+      color: 'rgba(255,255,255,0.85)',
+      fontWeight: '700',
+      letterSpacing: '1.5px',
+      textTransform: 'uppercase',
     },
     scoreValue: {
-      fontSize: isMobile ? '1.2rem' : '1.4rem',
+      fontSize: isMobile ? '1.1rem' : '1.3rem',
       fontWeight: '800',
       color: COLORS.white,
+      textShadow: '0 1px 3px rgba(0,0,0,0.2)',
     },
     timerBox: {
       display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      backgroundColor: COLORS.white,
-      padding: isMobile ? '6px 14px' : '8px 18px',
-      borderRadius: '12px',
-      boxShadow: '0 2px 10px rgba(0,0,0,0.2)',
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: '3px',
+      backgroundColor: 'rgba(255,255,255,0.95)',
+      padding: isMobile ? '5px 12px' : '6px 16px',
+      borderRadius: '10px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
+      pointerEvents: 'auto',
     },
     timerValue: {
-      fontSize: isMobile ? '1.4rem' : '1.6rem',
+      fontSize: isMobile ? '1.2rem' : '1.4rem',
       fontWeight: '800',
       color: COLORS.primary,
+      lineHeight: 1,
     },
     timerLabel: {
-      fontSize: isMobile ? '0.55rem' : '0.65rem',
+      fontSize: isMobile ? '0.55rem' : '0.6rem',
       color: COLORS.gray,
-      fontWeight: '600',
-      letterSpacing: '1px',
+      fontWeight: '700',
+      letterSpacing: '0.5px',
+      textTransform: 'uppercase',
     },
     progressBarContainer: {
-      padding: isMobile ? '10px 16px' : '12px 24px',
-      backgroundColor: COLORS.offWhite,
-      display: 'flex',
-      alignItems: 'center',
-      gap: isMobile ? '12px' : '16px',
-      borderBottom: `1px solid ${COLORS.offWhite}`,
       flexShrink: 0,
+      padding: isMobile ? '12px 16px 14px' : '14px 24px 16px',
+      backgroundColor: COLORS.white,
+      borderTop: `1px solid rgba(0,0,0,0.06)`,
+    },
+    progressBarInner: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '8px',
     },
     progressBarBg: {
-      flex: 1,
-      height: isMobile ? '12px' : '14px',
-      backgroundColor: '#E0E0E0',
-      borderRadius: '10px',
+      width: '100%',
+      height: isMobile ? '10px' : '12px',
+      backgroundColor: '#EAEAEA',
+      borderRadius: '6px',
       overflow: 'hidden',
-      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.1)',
+      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.08)',
     },
     progressBarFill: {
       height: '100%',
       background: `linear-gradient(90deg, ${COLORS.accent} 0%, ${COLORS.accentLight} 100%)`,
-      borderRadius: '10px',
+      borderRadius: '6px',
       transition: 'width 0.3s ease-out',
-      boxShadow: '0 0 10px rgba(0, 122, 194, 0.5)',
+    },
+    progressInfo: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
     },
     progressText: {
-      fontSize: isMobile ? '0.85rem' : '0.95rem',
+      fontSize: isMobile ? '0.8rem' : '0.85rem',
       fontWeight: '600',
-      color: COLORS.darkGray,
+      color: COLORS.gray,
       whiteSpace: 'nowrap',
     },
     streakBadge: {
-      fontSize: isMobile ? '0.9rem' : '1rem',
+      fontSize: isMobile ? '0.8rem' : '0.85rem',
       fontWeight: '700',
       color: COLORS.primary,
       backgroundColor: '#FFF3CD',
-      padding: '4px 10px',
+      padding: '3px 10px',
       borderRadius: '20px',
       animation: 'pulse 0.5s ease-in-out infinite alternate',
     },
