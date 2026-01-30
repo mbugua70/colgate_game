@@ -600,6 +600,46 @@ export default function ToothBrushGame() {
     }
   }, [gameState, checkBrushOverlap, createParticle, imageToScreen, streak, timeLeft, playDing, playWinSound, playClapSound]);
 
+  // Update the drawBrush function to draw the brush more accurately
+const drawBrush = useCallback((ctx) => {
+  if (!brushPosRef.current || !isBrushingRef.current) return;
+  const brushImg = brushImageRef.current;
+  if (!brushImg) return;
+
+  const { x, y } = brushPosRef.current;
+  const radius = brushRadiusRef.current;
+
+  // Calculate brush dimensions
+  const bristleHeadRatio = 0.22;
+  const headHeight = radius * 2;
+  const drawHeight = headHeight / bristleHeadRatio;
+  const drawWidth = drawHeight * (brushImg.width / brushImg.height);
+
+  ctx.save();
+  ctx.translate(x, y);
+
+  // For better accuracy, let's position the brush so the bristles
+  // (which are at the top of the image) are centered at the pointer
+  const bristleCenterY = -headHeight / 2;
+
+  // Draw the brush image
+  ctx.drawImage(
+    brushImg,
+    -drawWidth / 2,  // Center horizontally
+    bristleCenterY,  // Position so bristles are at pointer
+    drawWidth,
+    drawHeight
+  );
+
+  // DEBUG: Draw a small dot at the actual pointer position for testing
+  // ctx.beginPath();
+  // ctx.arc(0, 0, 3, 0, Math.PI * 2);
+  // ctx.fillStyle = 'red';
+  // ctx.fill();
+
+  ctx.restore();
+}, []);
+
   // Pointer handlers
   const getPointerPos = useCallback((e) => {
     const canvas = canvasRef.current;
@@ -840,35 +880,35 @@ export default function ToothBrushGame() {
   }, [imageToScreen, drawStains, drawDirtyOverlay]);
 
   // Draw toothbrush image cursor at brush position
-  const drawBrush = useCallback((ctx) => {
-    if (!brushPosRef.current || !isBrushingRef.current) return;
-    const brushImg = brushImageRef.current;
-    if (!brushImg) return;
+  // const drawBrush = useCallback((ctx) => {
+  //   if (!brushPosRef.current || !isBrushingRef.current) return;
+  //   const brushImg = brushImageRef.current;
+  //   if (!brushImg) return;
 
-    const { x, y } = brushPosRef.current;
-    const radius = brushRadiusRef.current;
+  //   const { x, y } = brushPosRef.current;
+  //   const radius = brushRadiusRef.current;
 
-    // Scale brush so the bristle head spans roughly 2x the brush radius
-    const bristleHeadRatio = 0.22; // bristles occupy ~top 22% of the image
-    const headHeight = radius * 2;
-    const drawHeight = headHeight / bristleHeadRatio;
-    const drawWidth = drawHeight * (brushImg.width / brushImg.height);
+  //   // Scale brush so the bristle head spans roughly 2x the brush radius
+  //   const bristleHeadRatio = 0.22; // bristles occupy ~top 22% of the image
+  //   const headHeight = radius * 2;
+  //   const drawHeight = headHeight / bristleHeadRatio;
+  //   const drawWidth = drawHeight * (brushImg.width / brushImg.height);
 
-    ctx.save();
-    ctx.translate(x, y);
-    // Flip 180 so bristles face down, then tilt 30 degrees for a natural angle
-    // ctx.rotate(Math.PI + Math.PI / 6);
-    // Offset so the bristle head center sits at the pointer position
-    // Bristles are at the top of the image, so shift down by half the head height
-    ctx.drawImage(
-      brushImg,
-      -drawWidth / 2,
-      -headHeight / 2,
-      drawWidth,
-      drawHeight
-    );
-    ctx.restore();
-  }, []);
+  //   ctx.save();
+  //   ctx.translate(x, y);
+  //   // Flip 180 so bristles face down, then tilt 30 degrees for a natural angle
+  //   // ctx.rotate(Math.PI + Math.PI / 6);
+  //   // Offset so the bristle head center sits at the pointer position
+  //   // Bristles are at the top of the image, so shift down by half the head height
+  //   ctx.drawImage(
+  //     brushImg,
+  //     -drawWidth / 2,
+  //     -headHeight / 2,
+  //     drawWidth,
+  //     drawHeight
+  //   );
+  //   ctx.restore();
+  // }, []);
 
   // Draw particles with enhanced effects
   const drawParticles = useCallback((ctx) => {
@@ -1094,7 +1134,7 @@ export default function ToothBrushGame() {
   const generateConfetti = useCallback(() => {
     const pieces = [];
     const colors = ['#ed1b24', '#007AC2', '#FFFFFF'];
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 400; i++) {
       pieces.push({
         id: i,
         left: Math.random() * 120,
@@ -1581,6 +1621,7 @@ const getResponsiveStyles = (screenSize) => {
     },
     messageBox: {
       textAlign: 'center',
+      height: !isTablet && !isMobile ?    'auto' : '700px',
       padding: isMobile ? '32px 24px' : isTablet ? '40px 36px' : '48px 48px',
       background: `linear-gradient(180deg, ${COLORS.white} 0%, ${COLORS.offWhite} 100%)`,
       borderRadius: isMobile ? '24px' : '28px',
@@ -1703,7 +1744,7 @@ const getResponsiveStyles = (screenSize) => {
     },
     button: {
       marginTop: '20px',
-      padding: isMobile ? '18px 48px' : isTablet ? '16px 44px' : '18px 48px',
+      padding: isMobile ? '18px 68px' : isTablet ? '16px 44px' : '18px 68px',
       fontSize: isMobile ? '1.2rem' : isTablet ? '1.15rem' : '1.2rem',
       background: `linear-gradient(135deg, ${COLORS.primary} 0%, ${COLORS.primaryDark} 100%)`,
       color: COLORS.white,
@@ -1714,7 +1755,7 @@ const getResponsiveStyles = (screenSize) => {
       textTransform: 'uppercase',
       letterSpacing: '2px',
       transition: 'transform 0.2s, box-shadow 0.2s',
-      minWidth: isMobile ? '200px' : '220px',
+      minWidth: isMobile ? '200px' : '260px',
       minHeight: isMobile ? '56px' : '52px',
       boxShadow: '0 6px 20px rgba(226, 5, 20, 0.4)',
     },
