@@ -8,8 +8,8 @@ const MAX_BRUSH_RADIUS = 50;
 
 // Colgate Brand Colors
 const COLORS = {
-  primary: '#E20514',      // Colgate Red
-  primaryDark: '#A0181F',  // Ruby Red
+  primary: '#ed1b24',      // Colgate Red
+  primaryDark: '#c41520',  // Ruby Red
   primaryLight: '#FF3344', // Lighter red for hover
   accent: '#007AC2',       // Colgate Blue
   accentLight: '#00A3E0',  // Light Blue
@@ -106,6 +106,8 @@ export default function ToothBrushGame() {
   const animationFrameRef = useRef(null);
   const scaleRef = useRef({ x: 1, y: 1, offsetX: 0, offsetY: 0 });
   const brushRadiusRef = useRef(BASE_BRUSH_RADIUS);
+  const audioCtxRef = useRef(null);
+  const lastDingTimeRef = useRef(0);
 
   const [gameState, setGameState] = useState('idle'); // idle, playing, won, lost
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
@@ -137,6 +139,83 @@ export default function ToothBrushGame() {
     } else {
       setScreenSize('desktop');
     }
+  }, []);
+
+  // Initialize audio context (created on first user interaction)
+  const initAudio = useCallback(() => {
+    if (audioCtxRef.current) return;
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    audioCtxRef.current = ctx;
+  }, []);
+
+  // Play a ding sound while brushing (throttled to avoid spamming)
+  const playDing = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    const now = Date.now();
+    if (now - lastDingTimeRef.current < 150) return; // Throttle: max one ding per 150ms
+    lastDingTimeRef.current = now;
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    // Randomize pitch slightly for variety
+    const baseFreq = 1200 + Math.random() * 400;
+    osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.2);
+  }, []);
+
+  // Play a win jingle
+  const playWinSound = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    const notes = [523, 659, 784, 1047]; // C5, E5, G5, C6
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const startTime = ctx.currentTime + i * 0.15;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(0.12, startTime + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + 0.4);
+    });
+  }, []);
+
+  // Play a lose/buzzer sound
+  const playLoseSound = useCallback(() => {
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, ctx.currentTime);
+    osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.5);
+    gain.gain.setValueAtTime(0.08, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.5);
+  }, []);
+
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close();
+      }
+    };
   }, []);
 
   // Initialize teeth with stains
@@ -343,6 +422,9 @@ export default function ToothBrushGame() {
 
           const screenTooth = imageToScreen(tooth.x, tooth.y);
 
+          // Play ding while brushing
+          playDing();
+
           // Emit stain removal particles while tooth is still dirty
           if (tooth.progress < 0.8 && Math.random() > 0.4) {
             for (let i = 0; i < 2; i++) {
@@ -405,9 +487,10 @@ export default function ToothBrushGame() {
       // Bonus points for time remaining
       const timeBonus = timeLeft * 50;
       setScore(prev => prev + timeBonus);
+      playWinSound();
       setGameState('won');
     }
-  }, [gameState, checkBrushOverlap, createParticle, imageToScreen, streak, timeLeft]);
+  }, [gameState, checkBrushOverlap, createParticle, imageToScreen, streak, timeLeft, playDing, playWinSound]);
 
   // Pointer handlers
   const getPointerPos = useCallback((e) => {
@@ -804,43 +887,46 @@ export default function ToothBrushGame() {
       ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, displayWidth, displayHeight);
 
-      // Draw background image (cover the full canvas)
-      if (bgImageRef.current) {
-        const bgImg = bgImageRef.current;
-        const bgRatio = bgImg.width / bgImg.height;
-        const canvasRatio = displayWidth / displayHeight;
-        let bgW, bgH, bgX, bgY;
-        if (canvasRatio > bgRatio) {
-          bgW = displayWidth;
-          bgH = displayWidth / bgRatio;
-          bgX = 0;
-          bgY = (displayHeight - bgH) / 2;
-        } else {
-          bgH = displayHeight;
-          bgW = displayHeight * bgRatio;
-          bgX = (displayWidth - bgW) / 2;
-          bgY = 0;
+      if (gameState === 'idle') {
+        // Idle screen: only show the Colgate background image
+        if (bgImageRef.current) {
+          const bgImg = bgImageRef.current;
+          const bgRatio = bgImg.width / bgImg.height;
+          const canvasRatio = displayWidth / displayHeight;
+          let bgW, bgH, bgX, bgY;
+          if (canvasRatio > bgRatio) {
+            bgW = displayWidth;
+            bgH = displayWidth / bgRatio;
+            bgX = 0;
+            bgY = (displayHeight - bgH) / 2;
+          } else {
+            bgH = displayHeight;
+            bgW = displayHeight * bgRatio;
+            bgX = (displayWidth - bgW) / 2;
+            bgY = 0;
+          }
+          ctx.drawImage(bgImg, bgX, bgY, bgW, bgH);
         }
-        ctx.drawImage(bgImg, bgX, bgY, bgW, bgH);
-      }
+      } else {
+        // Playing / won / lost: show the tooth image and game elements
+        if (imageRef.current) {
+          calculateScale();
+          const s = scaleRef.current;
+          ctx.drawImage(imageRef.current, s.offsetX, s.offsetY, s.drawWidth, s.drawHeight);
+        }
 
-      if (imageRef.current) {
-        calculateScale();
-        const s = scaleRef.current;
-        ctx.drawImage(imageRef.current, s.offsetX, s.offsetY, s.drawWidth, s.drawHeight);
-      }
+        teethRef.current.forEach(tooth => drawTooth(ctx, tooth));
 
-      teethRef.current.forEach(tooth => drawTooth(ctx, tooth));
+        updateParticles();
+        drawParticles(ctx);
 
-      updateParticles();
-      drawParticles(ctx);
+        if (gameState === 'playing') {
+          drawBrush(ctx);
+        }
 
-      if (gameState === 'playing') {
-        drawBrush(ctx);
-      }
-
-      if (gameState === 'won' && shieldProgress < 1) {
-        drawShield(ctx, shieldProgress);
+        if (gameState === 'won' && shieldProgress < 1) {
+          drawShield(ctx, shieldProgress);
+        }
       }
 
       animationFrameRef.current = requestAnimationFrame(render);
@@ -862,6 +948,7 @@ export default function ToothBrushGame() {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
+          playLoseSound();
           setGameState('lost');
           return 0;
         }
@@ -870,7 +957,7 @@ export default function ToothBrushGame() {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [gameState]);
+  }, [gameState, playLoseSound]);
 
   // Shield animation
   useEffect(() => {
@@ -920,6 +1007,7 @@ export default function ToothBrushGame() {
 
   // Game controls
   const startGame = () => {
+    initAudio();
     teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0, stains: generateStains(t) }));
     particlesRef.current = [];
     setTimeLeft(GAME_DURATION);
@@ -948,27 +1036,29 @@ export default function ToothBrushGame() {
 
   return (
     <div style={styles.container}>
-      {/* Header */}
-      <div style={styles.header}>
-        <div style={styles.logoSection}>
-          <h1 style={styles.title}>
-            <span style={styles.logoText}>Colgate</span>
-            <span style={styles.logoSubtext}>Brush Challenge</span>
-          </h1>
-        </div>
-        {gameState === 'playing' && (
-          <div style={styles.statsContainer}>
-            <div style={styles.scoreBox}>
-              <span style={styles.scoreLabel}>SCORE</span>
-              <span style={styles.scoreValue}>{Math.floor(score)}</span>
-            </div>
-            <div style={styles.timerBox}>
-              <span style={styles.timerValue}>{timeLeft}</span>
-              <span style={styles.timerLabel}>SEC</span>
-            </div>
+      {/* Header - hidden on start screen */}
+      {gameState !== 'idle' && (
+        <div style={styles.header}>
+          <div style={styles.logoSection}>
+            <h1 style={styles.title}>
+              <span style={styles.logoText}>Colgate</span>
+              <span style={styles.logoSubtext}>Brush Challenge</span>
+            </h1>
           </div>
-        )}
-      </div>
+          {gameState === 'playing' && (
+            <div style={styles.statsContainer}>
+              <div style={styles.scoreBox}>
+                <span style={styles.scoreLabel}>SCORE</span>
+                <span style={styles.scoreValue}>{Math.floor(score)}</span>
+              </div>
+              <div style={styles.timerBox}>
+                <span style={styles.timerValue}>{timeLeft}</span>
+                <span style={styles.timerLabel}>SEC</span>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Progress Bar */}
       {gameState === 'playing' && (
@@ -1027,7 +1117,7 @@ export default function ToothBrushGame() {
 
         {/* Win Screen */}
         {gameState === 'won' && shieldProgress >= 1 && (
-          <div style={styles.overlay}>
+          <div style={styles.overlayDimmed}>
             <div style={styles.messageBox}>
               <div style={styles.winBadge}>🏆</div>
               <h2 style={styles.winTitle}>Cavity Protection Activated!</h2>
@@ -1055,7 +1145,7 @@ export default function ToothBrushGame() {
 
         {/* Lose Screen */}
         {gameState === 'lost' && (
-          <div style={styles.overlay}>
+          <div style={styles.overlayDimmed}>
             <div style={styles.messageBox}>
               <div style={styles.loseBadge}>⏰</div>
               <h2 style={styles.loseTitle}>Time&apos;s Up!</h2>
@@ -1252,9 +1342,21 @@ const getResponsiveStyles = (screenSize) => {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: 'rgba(255, 255, 255, 0.85)',
+      backgroundColor: 'transparent',
       padding: isMobile ? '20px' : '24px',
-      backdropFilter: 'blur(12px)',
+    },
+    overlayDimmed: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: 'rgba(255, 255, 255, 0.6)',
+      padding: isMobile ? '20px' : '24px',
+      backdropFilter: 'blur(4px)',
     },
     messageBox: {
       textAlign: 'center',
@@ -1265,7 +1367,7 @@ const getResponsiveStyles = (screenSize) => {
       maxWidth: isMobile ? '95%' : isTablet ? '85%' : '480px',
       width: '100%',
       boxSizing: 'border-box',
-      boxShadow: '0 20px 60px rgba(226, 5, 20, 0.15), 0 8px 24px rgba(0,0,0,0.1)',
+      boxShadow: '0 20px 60px rgba(226, 5, 20, 0.2), 0 8px 32px rgba(0,0,0,0.15)',
     },
     colgateLogo: {
       fontSize: isMobile ? '2.5rem' : '3rem',
