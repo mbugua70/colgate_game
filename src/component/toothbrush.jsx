@@ -297,7 +297,9 @@ export default function ToothBrushGame() {
     startAudio.preload = 'auto';
     startSoundRef.current = startAudio;
 
-    const endAudio = new Audio('/background_cleaning_sfx.mp3.mpeg');
+    // const endAudio = new Audio('/background_cleaning_sfx.mp3.mpeg');
+    const endAudio = new Audio('/victory_sfx.mp3.mpeg');
+
     endAudio.preload = 'auto';
     endSoundRef.current = endAudio;
 
@@ -855,7 +857,7 @@ export default function ToothBrushGame() {
     ctx.save();
     ctx.translate(x, y);
     // Flip 180 so bristles face down, then tilt 30 degrees for a natural angle
-    ctx.rotate(Math.PI + Math.PI / 6);
+    // ctx.rotate(Math.PI + Math.PI / 6);
     // Offset so the bristle head center sits at the pointer position
     // Bristles are at the top of the image, so shift down by half the head height
     ctx.drawImage(
@@ -1583,7 +1585,7 @@ const getResponsiveStyles = (screenSize) => {
       background: `linear-gradient(180deg, ${COLORS.white} 0%, ${COLORS.offWhite} 100%)`,
       borderRadius: isMobile ? '24px' : '28px',
       border: `4px solid ${COLORS.primary}`,
-      maxWidth: isMobile ? '95%' : isTablet ? '85%' : '480px',
+      maxWidth: isMobile ? '95%' : isTablet ? '85%' : '680px',
       width: '100%',
       boxSizing: 'border-box',
       boxShadow: '0 20px 60px rgba(226, 5, 20, 0.2), 0 8px 32px rgba(0,0,0,0.15)',
@@ -1605,7 +1607,7 @@ const getResponsiveStyles = (screenSize) => {
     },
     messageTitle: {
       margin: '0 0 16px 0',
-      fontSize: isMobile ? '1.6rem' : isTablet ? '1.8rem' : '2rem',
+      fontSize: isMobile ? '1.6rem' : isTablet ? '1.8rem' : '2.5rem',
       fontWeight: '700',
       color: COLORS.darkGray,
     },
@@ -1619,19 +1621,19 @@ const getResponsiveStyles = (screenSize) => {
     },
     winTitle: {
       margin: '0 0 16px 0',
-      fontSize: isMobile ? '1.5rem' : isTablet ? '1.7rem' : '1.9rem',
+      fontSize: isMobile ? '1.5rem' : isTablet ? '1.7rem' : '2.2rem',
       fontWeight: '700',
       color: COLORS.accent,
     },
     loseTitle: {
       margin: '0 0 16px 0',
-      fontSize: isMobile ? '1.6rem' : isTablet ? '1.8rem' : '2rem',
+      fontSize: isMobile ? '1.6rem' : isTablet ? '1.8rem' : '2.2rem',
       fontWeight: '700',
       color: COLORS.primary,
     },
     messageText: {
       margin: '0 0 20px 0',
-      fontSize: isMobile ? '1.1rem' : isTablet ? '1.15rem' : '1.2rem',
+      fontSize: isMobile ? '1.1rem' : isTablet ? '1.15rem' : '1.6rem',
       color: COLORS.gray,
       lineHeight: 1.5,
     },
@@ -1643,7 +1645,7 @@ const getResponsiveStyles = (screenSize) => {
       border: `1px solid rgba(0, 122, 194, 0.2)`,
     },
     instructionItem: {
-      fontSize: isMobile ? '0.95rem' : '1rem',
+      fontSize: isMobile ? '0.95rem' : '1.4rem',
       color: COLORS.darkGray,
       padding: '8px 0',
       borderBottom: '1px solid rgba(0, 122, 194, 0.1)',
@@ -1658,7 +1660,7 @@ const getResponsiveStyles = (screenSize) => {
       gap: '4px',
     },
     finalScoreLabel: {
-      fontSize: isMobile ? '0.8rem' : '0.9rem',
+      fontSize: isMobile ? '0.8rem' : '1.4rem',
       color: 'rgba(255,255,255,0.8)',
       textTransform: 'uppercase',
       letterSpacing: '2px',
@@ -1694,7 +1696,7 @@ const getResponsiveStyles = (screenSize) => {
       letterSpacing: '1px',
     },
     encourageText: {
-      fontSize: isMobile ? '0.95rem' : '1rem',
+      fontSize: isMobile ? '0.95rem' : '1.4rem',
       color: COLORS.accent,
       fontWeight: '500',
       marginBottom: '8px',
