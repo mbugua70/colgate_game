@@ -669,9 +669,14 @@ export default function ToothBrushGame() {
     // Use display coordinates (not canvas internal coordinates)
     // since we're rendering in display space
     if (e.touches) {
+      // Shift touch position down to compensate for finger occlusion —
+      // the browser reports the touch at the top of the finger contact,
+      // but the user perceives their finger lower, causing the brush
+      // to appear above where they expect (especially on lower teeth).
+      const TOUCH_Y_OFFSET = 40;
       return {
         x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top
+        y: e.touches[0].clientY - rect.top + TOUCH_Y_OFFSET
       };
     }
     return {
@@ -1118,7 +1123,7 @@ export default function ToothBrushGame() {
           drawBrush(ctx);
         }
 
-        if (gameState === 'won' && shieldProgress < 1) {
+        if ((gameState === 'won' || gameState === 'lost') && shieldProgress < 1) {
           drawShield(ctx, shieldProgress);
         }
       }
@@ -1218,7 +1223,7 @@ export default function ToothBrushGame() {
 
   // Shield animation
   useEffect(() => {
-    if (gameState !== 'won') return;
+    if (gameState !== 'won' && gameState !== 'lost') return;
 
     const interval = setInterval(() => {
       setShieldProgress(prev => prev >= 1 ? 1 : prev + 0.02);
@@ -1431,7 +1436,7 @@ export default function ToothBrushGame() {
         )}
 
         {/* Lose Screen */}
-        {gameState === 'lost' && (
+        {gameState === 'lost' && shieldProgress >= 1 && (
           <div style={styles.overlayDimmed}>
             <div style={styles.messageBox}>
               <img src="/24 hour icon.png" alt="24 Hour Protection" style={styles.hourIcon} />
