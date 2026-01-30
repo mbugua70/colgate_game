@@ -171,33 +171,34 @@ export default function ToothBrushGame() {
     const source = ctx.createBufferSource();
     source.buffer = buffer;
 
-    // Bandpass filter to shape noise into a brushing texture
+    // Bandpass filter: lower range for a softer brushing texture
     const filter = ctx.createBiquadFilter();
     filter.type = 'bandpass';
-    filter.frequency.value = 2000 + Math.random() * 2000; // Vary between 2-4kHz
-    filter.Q.value = 0.8 + Math.random() * 0.4;
+    filter.frequency.value = 600 + Math.random() * 600; // 600-1200Hz, warm range
+    filter.Q.value = 0.4 + Math.random() * 0.3;
 
-    // Highpass to remove rumble
-    const highpass = ctx.createBiquadFilter();
-    highpass.type = 'highpass';
-    highpass.frequency.value = 800;
+    // Lowpass to cut harsh/itchy high frequencies
+    const lowpass = ctx.createBiquadFilter();
+    lowpass.type = 'lowpass';
+    lowpass.frequency.value = 1500;
+    lowpass.Q.value = 0.5;
 
-    // Gain envelope: quick attack, short sustain, fade out
+    // Gain envelope: gentle attack, soft sustain, smooth fade
     const gain = ctx.createGain();
     const t = ctx.currentTime;
     gain.gain.setValueAtTime(0, t);
-    gain.gain.linearRampToValueAtTime(0.08, t + 0.01);
-    gain.gain.setValueAtTime(0.08, t + 0.06);
-    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    gain.gain.linearRampToValueAtTime(0.04, t + 0.03);
+    gain.gain.setValueAtTime(0.04, t + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
 
     source.connect(filter);
-    filter.connect(highpass);
-    highpass.connect(gain);
+    filter.connect(lowpass);
+    lowpass.connect(gain);
     gain.connect(ctx.destination);
 
     // Start at a random offset in the buffer for variety
     const offset = Math.random() * 0.5;
-    source.start(t, offset, 0.12);
+    source.start(t, offset, 0.15);
   }, []);
 
   // Play a win jingle
