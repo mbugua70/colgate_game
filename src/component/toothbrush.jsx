@@ -141,34 +141,63 @@ export default function ToothBrushGame() {
     }
   }, []);
 
-  // Initialize audio context (created on first user interaction)
+  // Initialize audio context and create reusable noise buffer
+  const noiseBufferRef = useRef(null);
   const initAudio = useCallback(() => {
     if (audioCtxRef.current) return;
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     audioCtxRef.current = ctx;
+
+    // Pre-generate a noise buffer for brushing sounds
+    const sampleRate = ctx.sampleRate;
+    const length = sampleRate; // 1 second of noise
+    const buffer = ctx.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    noiseBufferRef.current = buffer;
   }, []);
 
-  // Play a ding sound while brushing (throttled to avoid spamming)
+  // Play a short brushing scrub sound (filtered noise burst)
   const playDing = useCallback(() => {
     const ctx = audioCtxRef.current;
-    if (!ctx) return;
+    const buffer = noiseBufferRef.current;
+    if (!ctx || !buffer) return;
     const now = Date.now();
-    if (now - lastDingTimeRef.current < 150) return; // Throttle: max one ding per 150ms
+    if (now - lastDingTimeRef.current < 100) return;
     lastDingTimeRef.current = now;
 
-    const osc = ctx.createOscillator();
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    // Bandpass filter to shape noise into a brushing texture
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 2000 + Math.random() * 2000; // Vary between 2-4kHz
+    filter.Q.value = 0.8 + Math.random() * 0.4;
+
+    // Highpass to remove rumble
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.value = 800;
+
+    // Gain envelope: quick attack, short sustain, fade out
     const gain = ctx.createGain();
-    osc.type = 'sine';
-    // Randomize pitch slightly for variety
-    const baseFreq = 1200 + Math.random() * 400;
-    osc.frequency.setValueAtTime(baseFreq, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, ctx.currentTime + 0.08);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.2);
-    osc.connect(gain);
+    const t = ctx.currentTime;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.08, t + 0.01);
+    gain.gain.setValueAtTime(0.08, t + 0.06);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+
+    source.connect(filter);
+    filter.connect(highpass);
+    highpass.connect(gain);
     gain.connect(ctx.destination);
-    osc.start(ctx.currentTime);
-    osc.stop(ctx.currentTime + 0.2);
+
+    // Start at a random offset in the buffer for variety
+    const offset = Math.random() * 0.5;
+    source.start(t, offset, 0.12);
   }, []);
 
   // Play a win jingle
