@@ -1396,7 +1396,7 @@ export default function ToothBrushGame() {
                 Clean all {totalTeeth} teeth before time runs out!
               </p>
               <div style={styles.instructions}>
-                <div style={styles.instructionItem}>Brush each toot h until it sparkles</div>
+                <div style={styles.instructionItem}>Brush each tooth until it sparkles</div>
                 <div style={styles.instructionItem}> Clean quickly for combo bonuses</div>
                 <div style={styles.instructionItem}>Beat the clock to win!</div>
               </div>
