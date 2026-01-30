@@ -1678,7 +1678,7 @@ const getResponsiveStyles = (screenSize) => {
     },
     messageBox: {
       textAlign: 'center',
-      height: !isTablet && !isMobile ?    'auto' : '700px',
+      // height: !isTablet && !isMobile ?    'auto' : '700px',
       padding: isMobile ? '32px 24px' : isTablet ? '40px 36px' : '48px 48px',
       background: `linear-gradient(180deg, ${COLORS.white} 0%, ${COLORS.offWhite} 100%)`,
       borderRadius: isMobile ? '24px' : '28px',
