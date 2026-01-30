@@ -21,6 +21,39 @@ const COLORS = {
   gold: '#FFD700',
 };
 
+// Stain color palette - realistic tooth discoloration
+const STAIN_COLORS = [
+  { r: 180, g: 150, b: 80 },   // Yellow plaque
+  { r: 160, g: 120, b: 60 },   // Dark yellow
+  { r: 140, g: 100, b: 50 },   // Brown-ish
+  { r: 200, g: 170, b: 100 },  // Light yellow
+  { r: 170, g: 130, b: 70 },   // Coffee stain
+  { r: 150, g: 140, b: 90 },   // Tartar
+];
+
+// Generate random stains for a tooth
+function generateStains(tooth) {
+  const count = 2 + Math.floor(Math.random() * 4); // 2-5 stains per tooth
+  const stains = [];
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.random() * tooth.r * 0.7;
+    const color = STAIN_COLORS[Math.floor(Math.random() * STAIN_COLORS.length)];
+    stains.push({
+      offsetX: Math.cos(angle) * dist,
+      offsetY: Math.sin(angle) * dist,
+      size: tooth.r * (0.3 + Math.random() * 0.5),
+      color,
+      opacity: 0.4 + Math.random() * 0.4,
+      // Irregular shape: use multiple overlapping ellipses
+      scaleX: 0.6 + Math.random() * 0.8,
+      scaleY: 0.6 + Math.random() * 0.8,
+      rotation: Math.random() * Math.PI,
+    });
+  }
+  return stains;
+}
+
 // Pre-configured tooth positions for the tooth.jpg image
 const INITIAL_TEETH = [
   // Upper arch (top row)
@@ -65,6 +98,7 @@ const INITIAL_TEETH = [
 export default function ToothBrushGame() {
   const canvasRef = useRef(null);
   const imageRef = useRef(null);
+  const bgImageRef = useRef(null);
   const teethRef = useRef([]);
   const particlesRef = useRef([]);
   const brushPosRef = useRef(null);
@@ -105,9 +139,13 @@ export default function ToothBrushGame() {
     }
   }, []);
 
-  // Initialize teeth
+  // Initialize teeth with stains
   useEffect(() => {
-    teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0 }));
+    teethRef.current = INITIAL_TEETH.map(t => ({
+      ...t,
+      progress: 0,
+      stains: generateStains(t),
+    }));
   }, []);
 
   // Inject CSS animations
@@ -143,13 +181,20 @@ export default function ToothBrushGame() {
     };
   }, []);
 
-  // Load image
+  // Load images
   useEffect(() => {
     const img = new Image();
     img.src = '/tooth.jpg';
     img.onload = () => {
       imageRef.current = img;
     };
+
+    const bgImg = new Image();
+    bgImg.src = '/interactive-screen-colgate-2.jpg.jpeg';
+    bgImg.onload = () => {
+      bgImageRef.current = bgImg;
+    };
+
     return () => {
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
@@ -220,19 +265,27 @@ export default function ToothBrushGame() {
     } else if (type === 'clean') {
       // Blue/white mint effect
       color = Math.random() > 0.5 ? COLORS.accentLight : COLORS.white;
+    } else if (type === 'stain') {
+      // Stain removal particles - brownish/yellowish specks
+      const stainColor = STAIN_COLORS[Math.floor(Math.random() * STAIN_COLORS.length)];
+      color = `rgba(${stainColor.r}, ${stainColor.g}, ${stainColor.b}, ${0.6 + Math.random() * 0.4})`;
     } else {
       // Foam - white with slight blue tint
       color = `rgba(200, 230, 255, ${0.6 + Math.random() * 0.4})`;
     }
 
+    // Stain particles fling off faster
+    const particleSpeed = type === 'stain' ? speed * 1.8 : speed;
+    const particleDecay = type === 'stain' ? Math.random() * 0.025 + 0.025 : Math.random() * 0.03 + 0.02;
+
     return {
       x,
       y,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
+      vx: Math.cos(angle) * particleSpeed,
+      vy: Math.sin(angle) * particleSpeed,
       life: 1,
-      decay: Math.random() * 0.03 + 0.02,
-      size: type === 'star' ? Math.random() * 8 + 6 : Math.random() * 6 + 3,
+      decay: particleDecay,
+      size: type === 'star' ? Math.random() * 8 + 6 : type === 'stain' ? Math.random() * 4 + 2 : Math.random() * 6 + 3,
       type,
       color,
       rotation: Math.random() * Math.PI * 2,
@@ -288,19 +341,34 @@ export default function ToothBrushGame() {
           const wasClean = tooth.progress >= 1;
           tooth.progress = Math.min(1, tooth.progress + PROGRESS_RATE);
 
-          // Add sparkles while brushing
-          if (Math.random() > 0.6) {
-            const screenTooth = imageToScreen(tooth.x, tooth.y);
+          const screenTooth = imageToScreen(tooth.x, tooth.y);
+
+          // Emit stain removal particles while tooth is still dirty
+          if (tooth.progress < 0.8 && Math.random() > 0.4) {
+            for (let i = 0; i < 2; i++) {
+              particlesRef.current.push(createParticle(
+                screenTooth.x + (Math.random() - 0.5) * tooth.r * scaleRef.current.x,
+                screenTooth.y + (Math.random() - 0.5) * tooth.r * scaleRef.current.y,
+                'stain'
+              ));
+            }
+          }
+
+          // Add sparkles while brushing (more as tooth gets cleaner)
+          if (Math.random() > (0.8 - tooth.progress * 0.4)) {
             particlesRef.current.push(createParticle(screenTooth.x, screenTooth.y, 'sparkle'));
           }
 
           // Tooth just became clean
           if (!wasClean && tooth.progress >= 1) {
             justCleaned = true;
-            const screenTooth = imageToScreen(tooth.x, tooth.y);
             // Burst of particles for clean tooth
             for (let i = 0; i < 8; i++) {
               particlesRef.current.push(createParticle(screenTooth.x, screenTooth.y, 'star'));
+            }
+            // Final burst of stain particles flying off
+            for (let i = 0; i < 6; i++) {
+              particlesRef.current.push(createParticle(screenTooth.x, screenTooth.y, 'stain'));
             }
           }
         }
@@ -380,12 +448,102 @@ export default function ToothBrushGame() {
     brushPosRef.current = null;
   }, []);
 
-  // Draw tooth with Colgate-themed glow effect
-  const drawTooth = useCallback((ctx, tooth) => {
-    if (tooth.progress <= 0) return;
+  // Draw stains on a tooth (fades as progress increases), clipped to tooth boundary
+  const drawStains = useCallback((ctx, tooth) => {
+    if (!tooth.stains || tooth.progress >= 1) return;
+
+    const screen = imageToScreen(tooth.x, tooth.y);
+    const scaleX = scaleRef.current.x;
+    const scaleY = scaleRef.current.y;
+    const screenRadius = tooth.r * scaleX;
+    const stainOpacity = 1 - tooth.progress; // Stains fade as tooth is cleaned
+
+    // Clip all stains to the tooth circle so nothing bleeds outside
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, screenRadius * 1.1, 0, Math.PI * 2);
+    ctx.clip();
+
+    tooth.stains.forEach(stain => {
+      const sx = screen.x + stain.offsetX * scaleX;
+      const sy = screen.y + stain.offsetY * scaleY;
+      const size = stain.size * scaleX;
+
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(stain.rotation);
+      ctx.scale(stain.scaleX, stain.scaleY);
+
+      // Draw irregular stain blob
+      const { r, g, b } = stain.color;
+      const alpha = stain.opacity * stainOpacity;
+
+      // Main stain body with soft edge gradient
+      const stainGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size);
+      stainGrad.addColorStop(0, `rgba(${r}, ${g}, ${b}, ${alpha})`);
+      stainGrad.addColorStop(0.5, `rgba(${r}, ${g}, ${b}, ${alpha * 0.7})`);
+      stainGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+      ctx.beginPath();
+      ctx.arc(0, 0, size, 0, Math.PI * 2);
+      ctx.fillStyle = stainGrad;
+      ctx.fill();
+
+      // Inner darker core for depth
+      const coreGrad = ctx.createRadialGradient(0, 0, 0, 0, 0, size * 0.4);
+      coreGrad.addColorStop(0, `rgba(${Math.max(0, r - 40)}, ${Math.max(0, g - 40)}, ${Math.max(0, b - 20)}, ${alpha * 0.5})`);
+      coreGrad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+
+      ctx.beginPath();
+      ctx.arc(0, 0, size * 0.4, 0, Math.PI * 2);
+      ctx.fillStyle = coreGrad;
+      ctx.fill();
+
+      ctx.restore();
+    });
+
+    ctx.restore(); // Remove clip
+  }, [imageToScreen]);
+
+  // Draw dirty overlay tint on uncleaned teeth
+  const drawDirtyOverlay = useCallback((ctx, tooth) => {
+    if (tooth.progress >= 1) return;
 
     const screen = imageToScreen(tooth.x, tooth.y);
     const screenRadius = tooth.r * scaleRef.current.x;
+    const dirtyAmount = 1 - tooth.progress;
+
+    // Yellowish tint overlay that fades as tooth gets cleaner, kept within tooth bounds
+    const overlay = ctx.createRadialGradient(
+      screen.x, screen.y, 0,
+      screen.x, screen.y, screenRadius
+    );
+    overlay.addColorStop(0, `rgba(180, 160, 80, ${dirtyAmount * 0.25})`);
+    overlay.addColorStop(0.7, `rgba(160, 140, 70, ${dirtyAmount * 0.15})`);
+    overlay.addColorStop(1, `rgba(140, 120, 60, 0)`);
+
+    ctx.beginPath();
+    ctx.arc(screen.x, screen.y, screenRadius, 0, Math.PI * 2);
+    ctx.fillStyle = overlay;
+    ctx.fill();
+  }, [imageToScreen]);
+
+  // Draw tooth with stains and whitening glow effect
+  const drawTooth = useCallback((ctx, tooth) => {
+    const screen = imageToScreen(tooth.x, tooth.y);
+    const screenRadius = tooth.r * scaleRef.current.x;
+
+    // Draw stains first (below other effects)
+    drawStains(ctx, tooth);
+
+    // Draw dirty overlay tint on uncleaned teeth
+    if (tooth.progress > 0 && tooth.progress < 1) {
+      drawDirtyOverlay(ctx, tooth);
+    } else if (tooth.progress <= 0) {
+      // Fully dirty tooth - just show stains and a slight tint
+      drawDirtyOverlay(ctx, tooth);
+      return; // No clean effects to draw
+    }
 
     const gradient = ctx.createRadialGradient(
       screen.x, screen.y, 0,
@@ -431,10 +589,13 @@ export default function ToothBrushGame() {
       }
       ctx.restore();
     } else {
-      // Partially cleaned - show progress with Colgate blue tint
+      // Partially cleaned - whitening transition effect
       const alpha = tooth.progress * 0.8;
-      gradient.addColorStop(0, `rgba(0, 163, 224, ${alpha * 0.5})`);
-      gradient.addColorStop(0.5, `rgba(200, 240, 255, ${alpha * 0.3})`);
+
+      // Whitening glow that increases with progress
+      gradient.addColorStop(0, `rgba(255, 255, 255, ${alpha * 0.6})`);
+      gradient.addColorStop(0.3, `rgba(220, 240, 255, ${alpha * 0.4})`);
+      gradient.addColorStop(0.6, `rgba(0, 163, 224, ${alpha * 0.2})`);
       gradient.addColorStop(1, 'rgba(200, 240, 255, 0)');
 
       // Progress ring
@@ -450,7 +611,7 @@ export default function ToothBrushGame() {
     ctx.arc(screen.x, screen.y, screenRadius * 1.5, 0, Math.PI * 2);
     ctx.fillStyle = gradient;
     ctx.fill();
-  }, [imageToScreen]);
+  }, [imageToScreen, drawStains, drawDirtyOverlay]);
 
   // Draw Colgate-themed brush cursor
   const drawBrush = useCallback((ctx) => {
@@ -536,6 +697,16 @@ export default function ToothBrushGame() {
         ctx.closePath();
         ctx.fillStyle = p.color;
         ctx.fill();
+      } else if (p.type === 'stain') {
+        // Stain removal particles - irregular brownish specks
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rotation);
+        const size = p.size * p.life;
+        ctx.beginPath();
+        // Slightly irregular shape
+        ctx.ellipse(0, 0, size, size * 0.6, 0, 0, Math.PI * 2);
+        ctx.fillStyle = p.color;
+        ctx.fill();
       } else {
         // Circular particles (foam, clean)
         ctx.beginPath();
@@ -580,18 +751,18 @@ export default function ToothBrushGame() {
     ctx.fillStyle = gradient;
     ctx.fill();
 
-    // Inner white protection ring
+    // Inner blue protection ring
     const innerRadius = currentRadius * 0.95;
     ctx.beginPath();
     ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(255, 255, 255, ${(1 - progress * 0.3) * 0.8})`;
+    ctx.strokeStyle = `rgba(0, 122, 194, ${(1 - progress * 0.3) * 0.6})`;
     ctx.lineWidth = 4;
     ctx.stroke();
 
     // Main Colgate red ring
     ctx.beginPath();
     ctx.arc(centerX, centerY, currentRadius, 0, Math.PI * 2);
-    ctx.strokeStyle = `rgba(226, 5, 20, ${1 - progress * 0.5})`;
+    ctx.strokeStyle = `rgba(226, 5, 20, ${(1 - progress * 0.5) * 0.8})`;
     ctx.lineWidth = 8;
     ctx.stroke();
 
@@ -605,7 +776,7 @@ export default function ToothBrushGame() {
 
       ctx.beginPath();
       ctx.arc(sparkleX, sparkleY, sparkleSize, 0, Math.PI * 2);
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.8 * (1 - progress * 0.5)})`;
+      ctx.fillStyle = `rgba(255, 215, 0, ${0.8 * (1 - progress * 0.5)})`;
       ctx.fill();
     }
   }, []);
@@ -625,23 +796,33 @@ export default function ToothBrushGame() {
       // Save context state and reset transform for clearing
       ctx.save();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-
-      // Dark gradient background
-      const bgGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      bgGradient.addColorStop(0, '#1a1a2e');
-      bgGradient.addColorStop(0.5, '#16213e');
-      bgGradient.addColorStop(1, '#0f0f23');
-      ctx.fillStyle = bgGradient;
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.restore();
 
-      // Clear with display dimensions using gradient
-      const displayGradient = ctx.createLinearGradient(0, 0, 0, displayHeight);
-      displayGradient.addColorStop(0, '#1a1a2e');
-      displayGradient.addColorStop(0.5, '#16213e');
-      displayGradient.addColorStop(1, '#0f0f23');
-      ctx.fillStyle = displayGradient;
+      // Clear display area with white
+      ctx.fillStyle = '#FFFFFF';
       ctx.fillRect(0, 0, displayWidth, displayHeight);
+
+      // Draw background image (cover the full canvas)
+      if (bgImageRef.current) {
+        const bgImg = bgImageRef.current;
+        const bgRatio = bgImg.width / bgImg.height;
+        const canvasRatio = displayWidth / displayHeight;
+        let bgW, bgH, bgX, bgY;
+        if (canvasRatio > bgRatio) {
+          bgW = displayWidth;
+          bgH = displayWidth / bgRatio;
+          bgX = 0;
+          bgY = (displayHeight - bgH) / 2;
+        } else {
+          bgH = displayHeight;
+          bgW = displayHeight * bgRatio;
+          bgX = (displayWidth - bgW) / 2;
+          bgY = 0;
+        }
+        ctx.drawImage(bgImg, bgX, bgY, bgW, bgH);
+      }
 
       if (imageRef.current) {
         calculateScale();
@@ -739,7 +920,7 @@ export default function ToothBrushGame() {
 
   // Game controls
   const startGame = () => {
-    teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0 }));
+    teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0, stains: generateStains(t) }));
     particlesRef.current = [];
     setTimeLeft(GAME_DURATION);
     setCleanCount(0);
@@ -751,7 +932,7 @@ export default function ToothBrushGame() {
   };
 
   const resetGame = () => {
-    teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0 }));
+    teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0, stains: generateStains(t) }));
     particlesRef.current = [];
     setTimeLeft(GAME_DURATION);
     setCleanCount(0);
@@ -1044,7 +1225,7 @@ const getResponsiveStyles = (screenSize) => {
       fontSize: isMobile ? '1.5rem' : '2rem',
       fontWeight: '800',
       color: COLORS.gold,
-      textShadow: '0 0 20px rgba(255, 215, 0, 0.8), 2px 2px 4px rgba(0,0,0,0.3)',
+      textShadow: '0 0 20px rgba(255, 215, 0, 0.8), 0 0 40px rgba(226, 5, 20, 0.4), 2px 2px 4px rgba(0,0,0,0.5)',
       zIndex: 100,
       animation: 'popIn 0.3s ease-out',
       pointerEvents: 'none',
@@ -1054,7 +1235,7 @@ const getResponsiveStyles = (screenSize) => {
       position: 'relative',
       overflow: 'hidden',
       minHeight: 0,
-      backgroundColor: '#1a1a2e',
+      backgroundColor: '#FFFFFF',
     },
     canvas: {
       width: '100%',
@@ -1071,9 +1252,9 @@ const getResponsiveStyles = (screenSize) => {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.85)',
+      backgroundColor: 'rgba(255, 255, 255, 0.85)',
       padding: isMobile ? '20px' : '24px',
-      backdropFilter: 'blur(8px)',
+      backdropFilter: 'blur(12px)',
     },
     messageBox: {
       textAlign: 'center',
@@ -1084,7 +1265,7 @@ const getResponsiveStyles = (screenSize) => {
       maxWidth: isMobile ? '95%' : isTablet ? '85%' : '480px',
       width: '100%',
       boxSizing: 'border-box',
-      boxShadow: '0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.1) inset',
+      boxShadow: '0 20px 60px rgba(226, 5, 20, 0.15), 0 8px 24px rgba(0,0,0,0.1)',
     },
     colgateLogo: {
       fontSize: isMobile ? '2.5rem' : '3rem',
