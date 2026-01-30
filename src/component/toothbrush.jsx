@@ -1177,7 +1177,7 @@ export default function ToothBrushGame() {
     return pieces;
   }, []);
 
-  // Play end sound, trigger confetti, and auto-reset on win/lose
+  // Play end sound and trigger confetti on win/lose
   useEffect(() => {
     if (gameState === 'won' || gameState === 'lost') {
       // Stop cleaning audio and game music
@@ -1195,31 +1195,35 @@ export default function ToothBrushGame() {
       }
       confettiPiecesRef.current = generateConfetti();
       setShowConfetti(true);
-
-      // Auto-reset to idle after 5 seconds
-      const timeout = setTimeout(() => {
-        teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0, stains: generateStains(t) }));
-        particlesRef.current = [];
-        cleaningAudioStartedRef.current = false;
-        setTimeLeft(GAME_DURATION);
-        setCleanCount(0);
-        setShieldProgress(0);
-        setScore(0);
-        setStreak(0);
-        lastCleanRef.current = 0;
-        [startSoundRef, endSoundRef, backSoundRef].forEach(ref => {
-          if (ref.current) {
-            ref.current.pause();
-            ref.current.currentTime = 0;
-          }
-        });
-        setShowConfetti(false);
-        confettiPiecesRef.current = [];
-        setGameState('idle');
-      }, 5000);
-      return () => clearTimeout(timeout);
     }
   }, [gameState, generateConfetti]);
+
+  // Auto-reset to idle 10 seconds after win/lose screen is shown (shield done)
+  useEffect(() => {
+    if ((gameState !== 'won' && gameState !== 'lost') || shieldProgress < 1) return;
+
+    const timeout = setTimeout(() => {
+      teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0, stains: generateStains(t) }));
+      particlesRef.current = [];
+      cleaningAudioStartedRef.current = false;
+      setTimeLeft(GAME_DURATION);
+      setCleanCount(0);
+      setShieldProgress(0);
+      setScore(0);
+      setStreak(0);
+      lastCleanRef.current = 0;
+      [startSoundRef, endSoundRef, backSoundRef].forEach(ref => {
+        if (ref.current) {
+          ref.current.pause();
+          ref.current.currentTime = 0;
+        }
+      });
+      setShowConfetti(false);
+      confettiPiecesRef.current = [];
+      setGameState('idle');
+    }, 10000);
+    return () => clearTimeout(timeout);
+  }, [gameState, shieldProgress]);
 
   // Shield animation
   useEffect(() => {
