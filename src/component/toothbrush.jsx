@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 
-const GAME_DURATION = 20;
+const GAME_DURATION = 30;
 const PROGRESS_RATE = 0.025;
 const BASE_BRUSH_RADIUS = 30;
 const MIN_BRUSH_RADIUS = 20;
@@ -111,6 +111,8 @@ export default function ToothBrushGame() {
   const lastDingTimeRef = useRef(0);
   const startSoundRef = useRef(null);
   const endSoundRef = useRef(null);
+  const backSoundRef =  useRef(null);
+  const  gameSoundRef = useRef(null);
 
   const [gameState, setGameState] = useState('idle'); // idle, playing, won, lost
   const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
@@ -122,6 +124,7 @@ export default function ToothBrushGame() {
   const [showPerfect, setShowPerfect] = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const confettiPiecesRef = useRef([]);
+  const cleaningAudioStartedRef = useRef(false);
 
   const totalTeeth = INITIAL_TEETH.length;
   const lastCleanRef = useRef(0);
@@ -295,7 +298,7 @@ export default function ToothBrushGame() {
   useEffect(() => {
     const startAudio = new Audio('/start_colgate_game.mp3.mpeg');
     startAudio.preload = 'auto';
-    startSoundRef.current = startAudio;
+      startSoundRef.current = startAudio;
 
     // const endAudio = new Audio('/background_cleaning_sfx.mp3.mpeg');
     const endAudio = new Audio('/victory_sfx.mp3.mpeg');
@@ -303,14 +306,56 @@ export default function ToothBrushGame() {
     endAudio.preload = 'auto';
     endSoundRef.current = endAudio;
 
+     const backAudio = new Audio('/background_cleaning_sfx.mp3.mpeg');
+      backAudio.preload = 'auto';
+    backSoundRef.current =backAudio;
+
+    const gameAudio  = new Audio('/game-music-loop-6-144641.mp3.mpeg')
+    gameAudio.preload = 'auto';
+    gameSoundRef.current =gameAudio;
+
+
     return () => {
-      [startSoundRef, endSoundRef].forEach(ref => {
+      [startSoundRef, endSoundRef, backSoundRef, gameSoundRef].forEach(ref => {
         if (ref.current) {
           ref.current.pause();
           ref.current.src = '';
           ref.current = null;
         }
       });
+    };
+  }, []);
+
+  // Play game music loop on idle/start screen
+  const musicBlockedRef = useRef(false);
+
+  useEffect(() => {
+    if (gameState === 'idle' && gameSoundRef.current) {
+      gameSoundRef.current.loop = true;
+      gameSoundRef.current.currentTime = 0;
+      const p = gameSoundRef.current.play();
+      if (p) {
+        p.then(() => { musicBlockedRef.current = false; })
+         .catch(() => { musicBlockedRef.current = true; });
+      }
+    } else {
+      musicBlockedRef.current = false;
+    }
+  }, [gameState]);
+
+  // Resume blocked audio on first user interaction after reload
+  useEffect(() => {
+    const handleInteraction = () => {
+      if (musicBlockedRef.current && gameSoundRef.current) {
+        gameSoundRef.current.play().catch(() => {});
+        musicBlockedRef.current = false;
+      }
+    };
+    document.addEventListener('click', handleInteraction);
+    document.addEventListener('touchstart', handleInteraction);
+    return () => {
+      document.removeEventListener('click', handleInteraction);
+      document.removeEventListener('touchstart', handleInteraction);
     };
   }, []);
 
@@ -509,6 +554,20 @@ export default function ToothBrushGame() {
 
     brushPosRef.current = { x, y };
 
+    // Switch from game music to cleaning audio on first brush
+    if (!cleaningAudioStartedRef.current) {
+      cleaningAudioStartedRef.current = true;
+      if (gameSoundRef.current) {
+        gameSoundRef.current.pause();
+        gameSoundRef.current.currentTime = 0;
+      }
+      if (backSoundRef.current) {
+        backSoundRef.current.loop = true;
+        backSoundRef.current.currentTime = 0;
+        backSoundRef.current.play().catch(() => {});
+      }
+    }
+
     // Add foam particles with mint effect
     for (let i = 0; i < 3; i++) {
       particlesRef.current.push(createParticle(x, y, 'foam'));
@@ -601,44 +660,7 @@ export default function ToothBrushGame() {
   }, [gameState, checkBrushOverlap, createParticle, imageToScreen, streak, timeLeft, playDing, playWinSound, playClapSound]);
 
   // Update the drawBrush function to draw the brush more accurately
-const drawBrush = useCallback((ctx) => {
-  if (!brushPosRef.current || !isBrushingRef.current) return;
-  const brushImg = brushImageRef.current;
-  if (!brushImg) return;
 
-  const { x, y } = brushPosRef.current;
-  const radius = brushRadiusRef.current;
-
-  // Calculate brush dimensions
-  const bristleHeadRatio = 0.22;
-  const headHeight = radius * 2;
-  const drawHeight = headHeight / bristleHeadRatio;
-  const drawWidth = drawHeight * (brushImg.width / brushImg.height);
-
-  ctx.save();
-  ctx.translate(x, y);
-
-  // For better accuracy, let's position the brush so the bristles
-  // (which are at the top of the image) are centered at the pointer
-  const bristleCenterY = -headHeight / 2;
-
-  // Draw the brush image
-  ctx.drawImage(
-    brushImg,
-    -drawWidth / 2,  // Center horizontally
-    bristleCenterY,  // Position so bristles are at pointer
-    drawWidth,
-    drawHeight
-  );
-
-  // DEBUG: Draw a small dot at the actual pointer position for testing
-  // ctx.beginPath();
-  // ctx.arc(0, 0, 3, 0, Math.PI * 2);
-  // ctx.fillStyle = 'red';
-  // ctx.fill();
-
-  ctx.restore();
-}, []);
 
   // Pointer handlers
   const getPointerPos = useCallback((e) => {
@@ -880,35 +902,36 @@ const drawBrush = useCallback((ctx) => {
   }, [imageToScreen, drawStains, drawDirtyOverlay]);
 
   // Draw toothbrush image cursor at brush position
-  // const drawBrush = useCallback((ctx) => {
-  //   if (!brushPosRef.current || !isBrushingRef.current) return;
-  //   const brushImg = brushImageRef.current;
-  //   if (!brushImg) return;
+  const drawBrush = useCallback((ctx) => {
+    if (!brushPosRef.current || !isBrushingRef.current) return;
+    const brushImg = brushImageRef.current;
+    if (!brushImg) return;
 
-  //   const { x, y } = brushPosRef.current;
-  //   const radius = brushRadiusRef.current;
+    const { x, y } = brushPosRef.current;
+    const radius = brushRadiusRef.current;
 
-  //   // Scale brush so the bristle head spans roughly 2x the brush radius
-  //   const bristleHeadRatio = 0.22; // bristles occupy ~top 22% of the image
-  //   const headHeight = radius * 2;
-  //   const drawHeight = headHeight / bristleHeadRatio;
-  //   const drawWidth = drawHeight * (brushImg.width / brushImg.height);
+    // Scale brush so the bristle head spans roughly 2x the brush radius
+    const bristleHeadRatio = 0.22; // bristles occupy ~top 22% of the image
+    const headHeight = radius * 2;
+    const drawHeight = headHeight / bristleHeadRatio;
+    const drawWidth = drawHeight * (brushImg.width / brushImg.height);
 
-  //   ctx.save();
-  //   ctx.translate(x, y);
-  //   // Flip 180 so bristles face down, then tilt 30 degrees for a natural angle
-  //   // ctx.rotate(Math.PI + Math.PI / 6);
-  //   // Offset so the bristle head center sits at the pointer position
-  //   // Bristles are at the top of the image, so shift down by half the head height
-  //   ctx.drawImage(
-  //     brushImg,
-  //     -drawWidth / 2,
-  //     -headHeight / 2,
-  //     drawWidth,
-  //     drawHeight
-  //   );
-  //   ctx.restore();
-  // }, []);
+    ctx.save();
+    ctx.translate(x, y);
+    // Flip 180 so bristles face down, then tilt 30 degrees for a natural angle
+    // ctx.rotate(Math.PI + Math.PI / 6);
+    // Offset so the bristle head center sits at the pointer position
+    // Bristles are at the top of the image, so shift down by half the head height
+    ctx.drawImage(
+      brushImg,
+      -drawWidth / 2,
+      -headHeight / 2,
+      drawWidth,
+      drawHeight
+    );
+    ctx.restore();
+  }, []);
+
 
   // Draw particles with enhanced effects
   const drawParticles = useCallback((ctx) => {
@@ -1149,15 +1172,47 @@ const drawBrush = useCallback((ctx) => {
     return pieces;
   }, []);
 
-  // Play end sound and trigger confetti on win/lose
+  // Play end sound, trigger confetti, and auto-reset on win/lose
   useEffect(() => {
     if (gameState === 'won' || gameState === 'lost') {
+      // Stop cleaning audio and game music
+      if (backSoundRef.current) {
+        backSoundRef.current.pause();
+        backSoundRef.current.currentTime = 0;
+      }
+      if (gameSoundRef.current) {
+        gameSoundRef.current.pause();
+        gameSoundRef.current.currentTime = 0;
+      }
       if (endSoundRef.current) {
         endSoundRef.current.currentTime = 0;
-        endSoundRef.current.play();
+        endSoundRef.current.play().catch(() => {});
       }
       confettiPiecesRef.current = generateConfetti();
       setShowConfetti(true);
+
+      // Auto-reset to idle after 5 seconds
+      const timeout = setTimeout(() => {
+        teethRef.current = INITIAL_TEETH.map(t => ({ ...t, progress: 0, stains: generateStains(t) }));
+        particlesRef.current = [];
+        cleaningAudioStartedRef.current = false;
+        setTimeLeft(GAME_DURATION);
+        setCleanCount(0);
+        setShieldProgress(0);
+        setScore(0);
+        setStreak(0);
+        lastCleanRef.current = 0;
+        [startSoundRef, endSoundRef, backSoundRef].forEach(ref => {
+          if (ref.current) {
+            ref.current.pause();
+            ref.current.currentTime = 0;
+          }
+        });
+        setShowConfetti(false);
+        confettiPiecesRef.current = [];
+        setGameState('idle');
+      }, 5000);
+      return () => clearTimeout(timeout);
     }
   }, [gameState, generateConfetti]);
 
@@ -1222,6 +1277,7 @@ const drawBrush = useCallback((ctx) => {
     setScore(0);
     setStreak(0);
     lastCleanRef.current = 0;
+    cleaningAudioStartedRef.current = false;
     setGameState('playing');
   };
 
@@ -1235,7 +1291,8 @@ const drawBrush = useCallback((ctx) => {
     setStreak(0);
     lastCleanRef.current = 0;
     // Stop sounds and clear confetti
-    [startSoundRef, endSoundRef].forEach(ref => {
+    cleaningAudioStartedRef.current = false;
+    [startSoundRef, endSoundRef, backSoundRef, gameSoundRef].forEach(ref => {
       if (ref.current) {
         ref.current.pause();
         ref.current.currentTime = 0;
